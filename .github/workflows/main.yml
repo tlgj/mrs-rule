@@ -23,7 +23,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 步骤 2: 安装 Mihomo (使用指定的版本链接)
+      # 步骤 2: 安装 Mihomo (修正版本)
       - name: Install Mihomo (Specific Version)
         run: |
           # 从你提供的固定链接下载 mihomo
@@ -32,8 +32,10 @@ jobs:
           # 解压文件
           gzip -d mihomo.gz
           
-          # 解压后的文件名较长，我们将其重命名为 mihomo 以便使用
-          mv mihomo-linux-amd64-compatible mihomo
+          # V V V V V V V V V V V V V V V V V V V V V V V
+          #  使用正确的文件名进行重命名
+          mv mihomo-linux-amd64-compatible-v1.19.15 mihomo
+          # A A A A A A A A A A A A A A A A A A A A A A A
           
           # 赋予执行权限
           chmod +x mihomo
@@ -66,4 +68,15 @@ jobs:
             git push
           else
             echo "No changes to commit."
-          fi
+          fi```
+
+### 主要改动
+
+唯一的改动在**步骤 2** 中的 `mv` 命令：
+
+*   **错误的命令**: `mv mihomo-linux-amd64-compatible mihomo`
+*   **修正后的命令**: `mv mihomo-linux-amd64-compatible-v1.19.15 mihomo`
+
+这个修正确保了脚本能够找到并重命名解压后的文件。
+
+请更新你的工作流程文件，然后再次运行它，这次应该可以成功了。
