@@ -1,0 +1,51 @@
+# .github/workflows/update_rules.yml
+
+name: Fetch and Convert China List
+
+on:
+  # 1. 定时任务：每天 0 点（UTC 时间）执行一次
+  schedule:
+    - cron: '0 0 * * *'
+  
+  # 2. 手动触发：允许你在 Actions 页面手动运行此工作流程
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 步骤 1: 检出你自己的仓库
+      # 这样我们才能在最后将生成的文件提交回去
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 步骤 2: 下载最新的 china-list.txt 文件
+      # 从指定的 URL 下载文件并保存为 china-list.txt
+      - name: Fetch latest china-list.txt
+        run: curl -o china-list.txt https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/china-list.txt
+
+      # 步骤 3: 设置 Python 环境
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      # 步骤 4: 运行转换脚本
+      # 执行 convert.py，它会读取 china-list.txt 并生成 china-list.mrs
+      - name: Run conversion script
+        run: python convert.py
+
+      # 步骤 5: 提交并推送生成的文件
+      - name: Commit and push if changed
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add china-list.mrs
+          # 检查是否有文件变动，只有在文件内容更新时才进行提交
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Auto-update china-list.mrs"
+            git push
+          else
+            echo "No changes to commit."
+          fi
