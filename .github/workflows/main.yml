@@ -1,6 +1,6 @@
 # .github/workflows/update_rules.yml
 
-name: Fetch and Convert China List with Mihomo
+name: Fetch, Convert, and Clean China Rules
 
 on:
   # 1. 定时任务：每天 0 点（UTC 时间）执行一次
@@ -23,16 +23,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 步骤 2: 安装 Mihomo (最终修正版)
+      # 步骤 2: (更新) 清理旧的产物和脚本
+      # 在生成新文件之前，删除所有旧的 .mrs 文件和不再需要的 convert.py 脚本。
+      - name: Clean up old artifacts and scripts
+        run: |
+          rm -f *.mrs
+          rm -f convert.py
+
+      # 步骤 3: 安装 Mihomo
       - name: Install Mihomo (Specific Version)
         run: |
           # 从你提供的固定链接下载，并直接保存为 mihomo.gz
           curl -Lo mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.15/mihomo-linux-amd64-compatible-v1.19.15.gz
           
-          # 解压文件。这将直接生成一个名为 'mihomo' 的文件
+          # 解压文件，直接生成名为 'mihomo' 的文件
           gzip -d mihomo.gz
-          
-          # 解压后的文件已正确命名为 'mihomo'，因此不需要 mv 命令
           
           # 赋予执行权限
           chmod +x mihomo
@@ -40,28 +45,54 @@ jobs:
           # 将其移动到系统路径中，以便全局调用
           sudo mv mihomo /usr/local/bin/
 
-      # 步骤 3: 下载最新的 china-list.txt
-      - name: Fetch latest china-list.txt
+      # --- 处理域名规则 (china-list) ---
+
+      # 步骤 4: 下载最新的 china-list.txt
+      - name: Fetch latest china-list.txt (Domain)
         run: curl -o china-list.txt https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/china-list.txt
 
-      # 步骤 4: 从 txt 准备 yaml 规则集文件
-      - name: Prepare YAML ruleset from TXT
+      # 步骤 5: 为域名列表准备 YAML 文件
+      - name: Prepare YAML ruleset from Domain TXT
         run: |
           echo "payload:" > china-list.yaml
           grep -vE '^#|^$' china-list.txt | awk '{print "  - \047" $0 "\047"}' >> china-list.yaml
 
-      # 步骤 5: 使用 Mihomo 将 YAML 转换为 MRS
-      - name: Convert YAML to MRS using Mihomo
+      # 步骤 6: 使用 Mihomo 将域名 YAML 转换为 MRS
+      - name: Convert Domain YAML to MRS using Mihomo
         run: mihomo convert-ruleset domain yaml china-list.yaml china-list.mrs
 
-      # 步骤 6: 提交并推送生成的文件
+      # --- 处理 IP 规则 (clang.cn) ---
+      
+      # 步骤 7: 下载最新的 all_cn.txt (IP CIDR)
+      - name: Fetch latest all_cn.txt (IP)
+        run: curl -o all_cn.txt https://ispip.clang.cn/all_cn.txt
+
+      # 步骤 8: 为 IP 列表准备 YAML 文件
+      - name: Prepare YAML ruleset from IP TXT
+        run: |
+          echo "payload:" > clangcn-ip.yaml
+          grep -vE '^#|^$' all_cn.txt | awk '{print "  - \047" $0 "\047"}' >> clangcn-ip.yaml
+
+      # 步骤 9: 使用 Mihomo 将 IP YAML 转换为 MRS
+      - name: Convert IP YAML to MRS using Mihomo
+        run: mihomo convert-ruleset ipcidr yaml clangcn-ip.yaml clangcn-ip.mrs
+
+      # --- 提交所有生成的文件 ---
+
+      # 步骤 10: 提交并推送所有已更改的规则文件
       - name: Commit and push if changed
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add china-list.mrs
+          
+          # 添加所有新生成的 .mrs 文件
+          git add *.mrs
+          
+          # 如果 convert.py 被删除了，也将其从 git 跟踪中移除
+          git rm --cached convert.py --ignore-unmatch
+          
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Auto-update china-list.mrs (via mihomo v1.19.15)"
+            git commit -m "Auto-update rules and clean up scripts"
             git push
           else
             echo "No changes to commit."
