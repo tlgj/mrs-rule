@@ -1,44 +1,65 @@
 # .github/workflows/update_rules.yml
 
-name: Fetch and Convert China List
+name: Fetch and Convert List with Mihomo
 
 on:
+  # 1. 定时任务：每天 0 点（UTC 时间）执行一次
   schedule:
     - cron: '0 0 * * *'
+  
+  # 2. 手动触发：允许你在 Actions 页面手动运行此工作流程
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
-    # V V V V V V V V V V V V V V V V V V V V V V V
-    #  在这里添加权限设置
+    # 授予工作流对仓库内容的写权限
     permissions:
-      contents: write # <--- 授予对仓库内容的写权限
-    # A A A A A A A A A A A A A A A A A A A A A A A
+      contents: write
 
     steps:
+      # 步骤 1: 检出你自己的仓库
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # 步骤 2: 安装 Mihomo
+      - name: Install Mihomo
+        run: |
+          # 从 GitHub Releases 下载最新的 mihomo 二进制文件
+          LATEST_URL=$(curl -s "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest" | grep "browser_download_url.*linux-amd64" | cut -d '"' -f 4)
+          curl -Lo mihomo.gz "$LATEST_URL"
+          gzip -d mihomo.gz
+          chmod +x mihomo
+          # 将其移动到系统路径中，以便全局调用
+          sudo mv mihomo /usr/local/bin/
+
+      # 步骤 3: 下载最新的 china-list.txt
       - name: Fetch latest china-list.txt
         run: curl -o china-list.txt https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/china-list.txt
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
+      # 步骤 4: 从 txt 准备 yaml 规则集文件
+      # mihomo 需要 yaml 格式的输入，所以我们动态生成一个
+      - name: Prepare YAML ruleset from TXT
+        run: |
+          echo "payload:" > china-list.yaml
+          # 过滤掉注释和空行，然后将每一行格式化为 YAML 列表项
+          grep -vE '^#|^$' china-list.txt | awk '{print "  - \047" $0 "\047"}' >> china-list.yaml
 
-      - name: Run conversion script
-        run: python convert.py
+      # 步骤 5: 使用 Mihomo 将 YAML 转换为 MRS
+      # 命令格式: mihomo convert-ruleset <type> <format> <input> <output>
+      - name: Convert YAML to MRS using Mihomo
+        run: mihomo convert-ruleset domain yaml china-list.yaml china-list.mrs
 
+      # 步骤 6: 提交并推送生成的文件
       - name: Commit and push if changed
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add china-list.mrs
+          # 检查是否有文件变动，只有在文件内容更新时才进行提交
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Auto-update china-list.mrs"
+            git commit -m "Auto-update china-list.mrs (via mihomo)"
             git push
           else
             echo "No changes to commit."
