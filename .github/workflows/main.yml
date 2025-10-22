@@ -23,12 +23,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 步骤 2: (更新) 清理旧的产物和脚本
-      # 在生成新文件之前，删除所有旧的 .mrs 文件和不再需要的 convert.py 脚本。
-      - name: Clean up old artifacts and scripts
-        run: |
-          rm -f *.mrs
-          rm -f convert.py
+      # 步骤 2: 清理旧的 .mrs 文件
+      # 在生成新文件之前，删除所有旧的 .mrs 文件，防止残留。
+      - name: Clean up old .mrs files
+        run: rm -f *.mrs
 
       # 步骤 3: 安装 Mihomo
       - name: Install Mihomo (Specific Version)
@@ -88,11 +86,8 @@ jobs:
           # 添加所有新生成的 .mrs 文件
           git add *.mrs
           
-          # 如果 convert.py 被删除了，也将其从 git 跟踪中移除
-          git rm --cached convert.py --ignore-unmatch
-          
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Auto-update rules and clean up scripts"
+            git commit -m "Auto-update domain and IP rules"
             git push
           else
             echo "No changes to commit."
