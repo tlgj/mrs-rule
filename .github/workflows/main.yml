@@ -73,9 +73,26 @@ jobs:
       - name: Convert IP YAML to MRS using Mihomo
         run: mihomo convert-ruleset ipcidr yaml clangcn-ip.yaml clangcn-ip.mrs
 
+      # --- 处理直连域名规则 (direct-list) ---
+      
+      # 步骤 10 (新): 下载最新的 direct-list.txt
+      - name: Fetch latest direct-list.txt (Domain)
+        run: curl -o direct-list.txt https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/direct-list.txt
+
+      # 步骤 11 (新): 为直连域名列表准备 YAML 文件
+      # 注意：direct-list.txt 的内容也是域名和域名后缀，所以也使用 domain 类型进行处理
+      - name: Prepare YAML ruleset from Direct Domain TXT
+        run: |
+          echo "payload:" > direct-list.yaml
+          grep -vE '^#|^$' direct-list.txt | awk '{print "  - \047" $0 "\047"}' >> direct-list.yaml
+
+      # 步骤 12 (新): 使用 Mihomo 将直连域名 YAML 转换为 MRS
+      - name: Convert Direct Domain YAML to MRS using Mihomo
+        run: mihomo convert-ruleset domain yaml direct-list.yaml direct-list.mrs
+
       # --- 提交所有生成的文件 ---
 
-      # 步骤 10: 提交并推送所有已更改的规则文件
+      # 步骤 13 (原10): 提交并推送所有已更改的规则文件
       - name: Commit and push if changed
         run: |
           git config --global user.name "github-actions[bot]"
