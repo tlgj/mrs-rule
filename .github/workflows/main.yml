@@ -114,7 +114,7 @@ jobs:
           # 检查暂存区（Staging Area）是否有变动。
           # 只有当 .mrs 文件确实发生变化并被暂存后，才执行提交。
           if ! git diff --staged --quiet; then
-            git commit -m "Auto-update domain and IP rules (v1.1.1)"
+            git commit -m "Auto-update domain and IP rules ($(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M'))"
             git push
           else
             echo "No changes to commit."
