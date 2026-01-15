@@ -1,0 +1,121 @@
+name: Fetch, Convert, and Clean China Rules
+
+on:
+  # 1. 定时任务：每天 0 点（UTC 时间）执行一次
+  schedule:
+    - cron: '0 0 * * *'
+  
+  # 2. 手动触发：允许你在 Actions 页面手动运行此工作流程
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    # 授予工作流对仓库内容的写权限
+    permissions:
+      contents: write
+
+    steps:
+      # 步骤 1: 检出你自己的仓库
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 步骤 2: 清理旧的 .mrs 文件
+      # 在生成新文件之前，删除所有旧的 .mrs 文件，防止残留。
+      - name: Clean up old .mrs files
+        run: rm -f *.mrs
+
+      # 步骤 3: 安装 Mihomo
+      - name: Install Mihomo (Specific Version)
+        run: |
+          # 从你提供的固定链接下载，并直接保存为 mihomo.gz
+          curl -Lo mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.15/mihomo-linux-amd64-compatible-v1.19.15.gz
+          
+          # 解压文件，直接生成名为 'mihomo' 的文件
+          gzip -d mihomo.gz
+          
+          # 赋予执行权限
+          chmod +x mihomo
+          
+          # 将其移动到系统路径中，以便全局调用
+          sudo mv mihomo /usr/local/bin/
+
+      # --- 处理域名规则 (china-list) ---
+
+      # 步骤 4: 下载最新的 china-list.txt
+      - name: Fetch latest china-list.txt (Domain)
+        run: curl -o china-list.txt https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/china-list.txt
+
+      # 步骤 5: 为域名列表准备 YAML 文件
+      - name: Prepare YAML ruleset from Domain TXT
+        run: |
+          echo "payload:" > china-list.yaml
+          grep -vE '^#|^$' china-list.txt | awk '{print "  - \047" $0 "\047"}' >> china-list.yaml
+
+      # 步骤 6: 使用 Mihomo 将域名 YAML 转换为 MRS
+      - name: Convert Domain YAML to MRS using Mihomo
+        run: mihomo convert-ruleset domain yaml china-list.yaml china-list.mrs
+
+      # --- 处理 IP 规则 (clang.cn) ---
+      
+      # 步骤 7: 下载最新的 all_cn.txt (IP CIDR)
+      - name: Fetch latest all_cn.txt (IP)
+        run: curl -o all_cn.txt https://ispip.clang.cn/all_cn.txt
+
+      # 步骤 8: 为 IP 列表准备 YAML 文件
+      - name: Prepare YAML ruleset from IP TXT
+        run: |
+          echo "payload:" > clangcn-ip.yaml
+          grep -vE '^#|^$' all_cn.txt | awk '{print "  - \047" $0 "\047"}' >> clangcn-ip.yaml
+
+      # 步骤 9: 使用 Mihomo 将 IP YAML 转换为 MRS
+      - name: Convert IP YAML to MRS using Mihomo
+        run: mihomo convert-ruleset ipcidr yaml clangcn-ip.yaml clangcn-ip.mrs
+
+      # --- 处理直连域名规则 (direct-list) ---
+      
+      # 步骤 10: 下载最新的 direct-list.txt
+      - name: Fetch latest direct-list.txt (Domain)
+        run: curl -o direct-list.txt https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/direct-list.txt
+
+      # 步骤 11: 为直连域名列表准备 YAML 文件
+      - name: Prepare YAML ruleset from Direct Domain TXT
+        run: |
+          echo "payload:" > direct-list.yaml
+          grep -vE '^#|^$' direct-list.txt | awk '{print "  - \047" $0 "\047"}' >> direct-list.yaml
+
+      # 步骤 12: 使用 Mihomo 将直连域名 YAML 转换为 MRS
+      - name: Convert Direct Domain YAML to MRS using Mihomo
+        run: mihomo convert-ruleset domain yaml direct-list.yaml direct-list.mrs
+
+      # --- 处理 Cloudflare IP 规则 (新增) ---
+      
+      # 步骤 13 (新): 下载最新的 cloudflare.txt (IP CIDR - 已是 YAML 格式)
+      - name: Fetch latest cloudflare.txt (IP - Already in YAML format)
+        run: curl -o cloudflare-ip.yaml https://raw.githubusercontent.com/Loyalsoldier/geoip/refs/heads/release/clash/ipcidr/cloudflare.txt
+
+      # 步骤 14 (新): 使用 Mihomo 将 Cloudflare IP YAML 转换为 MRS
+      # 注意：该文件已经是 YAML 格式，直接转换即可
+      - name: Convert Cloudflare IP YAML to MRS using Mihomo
+        run: mihomo convert-ruleset ipcidr yaml cloudflare-ip.yaml cloudflare-ip.mrs
+
+      # --- 提交所有生成的文件 ---
+
+      # 步骤 15 (原13): 提交并推送所有已更改的规则文件
+      - name: Commit and push if changed
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 添加所有新生成的 .mrs 文件
+          git add *.mrs
+          
+          # 检查暂存区（Staging Area）是否有变动。
+          # 只有当 .mrs 文件确实发生变化并被暂存后，才执行提交。
+          if ! git diff --staged --quiet; then
+            git commit -m "Auto-update domain and IP rules ($(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M'))"
+            git push
+          else
+            echo "No changes to commit."
+          fi
