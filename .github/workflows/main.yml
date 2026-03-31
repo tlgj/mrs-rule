@@ -17,107 +17,141 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 步骤 2: 清理旧的 .mrs 文件
-      - name: Clean up old .mrs files
-        run: rm -f *.mrs
+      # 步骤 2: 清理旧文件
+      - name: Clean up old files
+        run: rm -f *.mrs *.txt *.yaml
 
       # 步骤 3: 安装 Mihomo
       - name: Install Mihomo
         run: |
+          set -euo pipefail
           curl -fLo mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.15/mihomo-linux-amd64-compatible-v1.19.15.gz
           gzip -d mihomo.gz
           chmod +x mihomo
           sudo mv mihomo /usr/local/bin/
+          mihomo -v
 
       # --- 处理域名规则 (china-list) ---
 
       # 步骤 4: 下载 china-list.txt
       - name: Fetch latest china-list.txt (Domain)
-        run: curl -fLo china-list.txt https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/china-list.txt
+        run: |
+          set -euo pipefail
+          curl -fLo china-list.txt https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/china-list.txt
 
       # 步骤 5: 准备域名 YAML
       - name: Prepare YAML from Domain TXT
         run: |
+          set -euo pipefail
           echo "payload:" > china-list.yaml
           grep -vE '^#|^$' china-list.txt | awk '{print "  - \047" $0 "\047"}' >> china-list.yaml
 
       # 步骤 6: 转换为 MRS
       - name: Convert Domain YAML to MRS
-        run: mihomo convert-ruleset domain yaml china-list.yaml china-list.mrs
+        run: |
+          set -euo pipefail
+          mihomo convert-ruleset domain yaml china-list.yaml china-list.mrs
 
       # --- 处理 IP 规则 (多数据源合并去重) ---
 
       # 步骤 7: 下载多个 CN IP 数据源
       - name: Fetch CN IP lists from multiple sources
         run: |
+          set -euo pipefail
           curl -fLo clang_cn.txt https://ispip.clang.cn/all_cn.txt
           curl -fLo yfgao_cn.txt https://gaoyifan.github.io/china-operator-ip/china.txt
 
       # 步骤 8: 合并、去重，生成 YAML
       - name: Merge, deduplicate and prepare YAML
         run: |
-          # 合并 → 去除注释和空行 → 排序 → 去重
+          set -euo pipefail
+
+          # 合并 → 去除注释和空行 → 排序去重
           cat clang_cn.txt yfgao_cn.txt \
             | grep -vE '^#|^$|^//' \
-            | sort \
-            | uniq \
+            | sort -u \
             > merged_cn.txt
-          
+
           # 打印统计信息
           echo "=== 合并统计 ==="
           echo "clang.cn 条目数:  $(grep -cvE '^#|^$' clang_cn.txt)"
           echo "yfgao.com 条目数: $(grep -cvE '^#|^$|^//' yfgao_cn.txt)"
           echo "合并去重后条目数: $(wc -l < merged_cn.txt)"
           echo "================"
-          
+
           # 生成 YAML
-          echo "payload:" > clangcn-ip.yaml
+          echo "payload:" > cn-ip.yaml
           awk '{print "  - \047" $0 "\047"}' merged_cn.txt >> cn-ip.yaml
 
       # 步骤 9: 转换为 MRS
       - name: Convert IP YAML to MRS
-        run: mihomo convert-ruleset ipcidr yaml cn-ip.yaml cn-ip.mrs
+        run: |
+          set -euo pipefail
+          mihomo convert-ruleset ipcidr yaml cn-ip.yaml cn-ip.mrs
 
       # --- 处理直连域名规则 (direct-list) ---
 
       # 步骤 10: 下载 direct-list.txt
       - name: Fetch latest direct-list.txt (Domain)
-        run: curl -fLo direct-list.txt https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/direct-list.txt
+        run: |
+          set -euo pipefail
+          curl -fLo direct-list.txt https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/direct-list.txt
 
       # 步骤 11: 准备直连域名 YAML
       - name: Prepare YAML from Direct Domain TXT
         run: |
+          set -euo pipefail
           echo "payload:" > direct-list.yaml
           grep -vE '^#|^$' direct-list.txt | awk '{print "  - \047" $0 "\047"}' >> direct-list.yaml
 
       # 步骤 12: 转换为 MRS
       - name: Convert Direct Domain YAML to MRS
-        run: mihomo convert-ruleset domain yaml direct-list.yaml direct-list.mrs
+        run: |
+          set -euo pipefail
+          mihomo convert-ruleset domain yaml direct-list.yaml direct-list.mrs
 
       # --- 处理 Cloudflare IP 规则 ---
 
-      # 步骤 13: 下载 Cloudflare IP 规则（已是 YAML 格式）
+      # 步骤 13: 下载 Cloudflare IP 规则（内容已是 YAML）
       - name: Fetch latest cloudflare IP rules
-        run: curl -fLo cloudflare-ip.yaml https://raw.githubusercontent.com/Loyalsoldier/geoip/refs/heads/release/clash/ipcidr/cloudflare.txt
+        run: |
+          set -euo pipefail
+          curl -fLo cloudflare-ip.yaml https://raw.githubusercontent.com/Loyalsoldier/geoip/refs/heads/release/clash/ipcidr/cloudflare.txt
 
       # 步骤 14: 转换为 MRS
       - name: Convert Cloudflare IP YAML to MRS
-        run: mihomo convert-ruleset ipcidr yaml cloudflare-ip.yaml cloudflare-ip.mrs
+        run: |
+          set -euo pipefail
+          mihomo convert-ruleset ipcidr yaml cloudflare-ip.yaml cloudflare-ip.mrs
 
-      # --- 清理中间文件并提交 ---
+      # 步骤 15: 显示生成结果
+      - name: List generated MRS files
+        run: |
+          set -euo pipefail
+          ls -lh *.mrs
 
-      # 步骤 15: 清理中间文件
+      # 步骤 16: 清理中间文件
       - name: Clean up intermediate files
         run: rm -f *.txt *.yaml
 
-      # 步骤 16: 提交并推送
+      # 步骤 17: 提交并推送
       - name: Commit and push if changed
         run: |
+          set -euo pipefail
+
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git add *.mrs
-          
+
+          shopt -s nullglob
+          files=( *.mrs )
+
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "没有生成任何 .mrs 文件，跳过提交。"
+            exit 1
+          fi
+
+          git add "${files[@]}"
+
           if ! git diff --staged --quiet; then
             git commit -m "自动更新规则集 ($(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M'))"
             git push
