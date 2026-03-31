@@ -28,6 +28,19 @@ jobs:
           sudo mv mihomo /usr/local/bin/
           mihomo -v
 
+      # --- 域名规则：direct ---
+
+      - name: Fetch latest direct rules
+        run: |
+          set -euo pipefail
+          # clash-rules 仓库的 direct.txt 已经是合法的 payload yaml 格式，直接保存为 yaml 即可
+          curl -fLo direct.yaml https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/direct.txt
+
+      - name: Convert direct YAML to MRS
+        run: |
+          set -euo pipefail
+          mihomo convert-ruleset domain yaml direct.yaml direct.mrs
+
       # --- CN IP 规则 ---
 
       - name: Fetch CN IP lists from multiple sources
